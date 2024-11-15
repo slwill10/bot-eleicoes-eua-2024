@@ -1,7 +1,23 @@
 import requests
-from bs4 import BeautifulSoup
 import time
+from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+from pymongo import InsertOne
+
+
+def processar_termo(urls, base_url, termo):
+    search_url = base_url + termo.replace(" ", "+")
+    func = urls[base_url]
+    return func(search_url)
+
+
+def atualizar_mongo_cache(mongo, manchetes_local):
+    requests = []
+    for manchete in manchetes_local:
+        requests.append(InsertOne(manchete))
+    if requests:
+        mongo.db.collection.bulk_write(requests)
+
 
 def enviar_mensagem(token, chat_id, mensagem):
     url = f'https://api.telegram.org/bot{token}/sendMessage'
@@ -15,6 +31,7 @@ def enviar_mensagem(token, chat_id, mensagem):
             print(f"Mensagem enviada com sucesso para o chat_id {chat_id}")
         else:
             print(f"Erro ao enviar mensagem: {response.status_code} - {response.text}")
+    
     except Exception as e:
         print(f"Exceção ao enviar mensagem: {e}")
 
@@ -44,15 +61,13 @@ def economist(url):
 
     return headlines
 
-def nytimes(url):
+def ny_times(url):
     headlines = []
     try:
         response = requests.get(url)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-
             headline_tags = soup.find_all('li', class_='css-1l4w6pd')
-
             print(f"Encontradas {len(headline_tags)} manchetes.url:{url}")
 
             for tag in headline_tags:
@@ -60,8 +75,9 @@ def nytimes(url):
                 if link_tag:
                     span_tag = tag.find('h4', class_='css-nsjm9t')
                     headlines.append({'texto': span_tag.get_text(strip=True), 'fonte': f'https://www.nytimes.com{link_tag['href']}'})
-
+            
             print(headlines)
+
         else:
             print(f"Erro ao acessar {url}: {response.status_code}")
 
@@ -85,8 +101,8 @@ def rasmussenreports(url):
                 if link_tag:
                     title_tag = tag.find('h3', class_='mt-1 mb-2')
                     headlines.append({'texto': title_tag.get_text(strip=True), 'fonte': f'https://www.rasmussenreports.com{link_tag['href']}'})
-
             print(headlines)
+
         else:
             print(f"Erro ao acessar {url}: {response.status_code}")
 
@@ -96,9 +112,7 @@ def rasmussenreports(url):
     return headlines
 
 def latimes(url):
-
     headlines = []
-    
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
     }
@@ -116,6 +130,7 @@ def latimes(url):
                         title_tag = tag.find('h3', class_='promo-title')
                         headlines.append({'texto': title_tag.get_text(strip=True), 'fonte': link_tag['href']})
                 print(headlines)
+                
         else:
             print(f"Erro ao acessar {url}: {response.status_code}")
 
@@ -180,9 +195,8 @@ def usatoday(url):
 
             for tag in headline_tags:
                 headlines.append({'texto': tag.get_text(strip=True), 'fonte': f'https://www.usatoday.com{tag['href']}'})
-
-
             print(headlines)
+
         else:
             print(f"Erro ao acessar {url}: {response.status_code}")
 
@@ -191,32 +205,21 @@ def usatoday(url):
 
     return headlines
 
-def abcNews(url):
+def abc_news(url):
     headlines = []
-
     try:
-        # Inicia o Playwright
         with sync_playwright() as p:
-            # Usa o navegador Chromium (você pode trocar por Firefox ou WebKit)
-            browser = p.chromium.launch(headless=True)  # Use headless=False se quiser ver o navegador em ação
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # Acessa a URL
             page.goto(url)
-            page.wait_for_load_state('networkidle')  # Espera até que toda a rede esteja ociosa (útil para páginas dinâmicas)
+            page.wait_for_load_state('networkidle')
 
-            # Extrai o HTML completo da página
             page_content = page.content()
-
-            # Passa o HTML para o BeautifulSoup
             soup = BeautifulSoup(page_content, 'html.parser')
-
-            # Verifica a estrutura da página e extrai as manchetes
             headline_tags = soup.find_all('section', class_='ContentRoll__Item')
-
             print(f"Encontradas {len(headline_tags)} manchetes. url: {url}")
 
-            # Extrai as manchetes e os links
             for tag in headline_tags:
                 link_tag = tag.find('a')
                 if link_tag:
@@ -226,8 +229,6 @@ def abcNews(url):
                     })
 
             browser.close()
-
-            # Imprime as manchetes encontradas
             print(headlines)
 
     except Exception as e:
@@ -235,36 +236,23 @@ def abcNews(url):
 
     return headlines     
 
-def foxNews(url):
+def fox_news(url):
     headlines = []
     try:
-        # Inicia o Playwright
         with sync_playwright() as p:
-            # Usa o navegador Chromium (você pode trocar por Firefox ou WebKit)
-            browser = p.chromium.launch(headless=True)  # Use headless=False se quiser ver o navegador em ação
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # Acessa a URL com um timeout aumentado (60 segundos)
-            page.goto(url, timeout=120000)  # Timeout aumentado para 60 segundos
-
-            # Espera que a página esteja completamente carregada, aumentando o timeout
-            page.wait_for_load_state('networkidle', timeout=120000)  # Timeout aumentado para 60 segundos
-
-            # Aguarda um tempo extra (10 segundos) para garantir que o conteúdo seja carregado
+            page.goto(url, timeout=120000)
+            page.wait_for_load_state('networkidle', timeout=120000)
             time.sleep(10)
 
-            # Extrai o HTML completo da página
             page_content = page.content()
-
-            # Passa o HTML para o BeautifulSoup
             soup = BeautifulSoup(page_content, 'html.parser')
 
-            # Verifica a estrutura da página e extrai as manchetes
             headline_tags = soup.find_all('article', class_='article')
-
             print(f"Encontradas {len(headline_tags)} manchetes. url: {url}")
 
-            # Extrai as manchetes e os links
             for tag in headline_tags:
                 link_tag = tag.find('a')
                 if link_tag:
@@ -276,8 +264,6 @@ def foxNews(url):
                         })
 
             browser.close()
-
-            # Imprime as manchetes encontradas
             print(headlines)
 
     except Exception as e:
@@ -288,28 +274,18 @@ def foxNews(url):
 def pbs(url):
     headlines = []
     try:
-        # Inicia o Playwright
         with sync_playwright() as p:
-            # Usa o navegador Chromium (você pode trocar por Firefox ou WebKit)
-            browser = p.chromium.launch(headless=True)  # Use headless=False se quiser ver o navegador em ação
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # Acessa a URL
             page.goto(url)
-            page.wait_for_load_state('networkidle')  # Espera até que toda a rede esteja ociosa (útil para páginas dinâmicas)
-
-            # Extrai o HTML completo da página
+            page.wait_for_load_state('networkidle')
             page_content = page.content()
 
-            # Passa o HTML para o BeautifulSoup
             soup = BeautifulSoup(page_content, 'html.parser')
-
-            # Verifica a estrutura da página e extrai as manchetes
             headline_tags = soup.find_all('li', class_='search-result-video-item')
-
             print(f"Encontradas {len(headline_tags)} manchetes. url: {url}")
 
-            # Extrai as manchetes e os links
             for tag in headline_tags:
                 link_tag = tag.find('a', class_='search-result-video-item__video-title')
                 if link_tag:
@@ -319,8 +295,6 @@ def pbs(url):
                     })
 
             browser.close()
-
-            # Imprime as manchetes encontradas
             print(headlines)
 
     except Exception as e:
@@ -328,7 +302,7 @@ def pbs(url):
 
     return headlines
 
-def nyPost(url):
+def ny_post(url):
     headlines = []
     try:
         response = requests.get(url)
@@ -343,8 +317,8 @@ def nyPost(url):
                     if link_tag:
                         title_tag = tag.find('h3', class_='story__headline headline headline--archive')  
                         headlines.append({'texto': title_tag.get_text(strip=True), 'fonte': link_tag['href']})
-
                 print(headlines)
+
     except Exception as e:    
         print(e)  
 
@@ -353,29 +327,18 @@ def nyPost(url):
 def ajc(url):
     headlines = []
     try:
-        # Inicia o Playwright
         with sync_playwright() as p:
-            # Usa o navegador Chromium (você pode trocar por Firefox ou WebKit)
-            browser = p.chromium.launch(headless=True)  # Use headless=False se quiser ver o navegador em ação
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # Acessa a URL
-            page.goto(url, timeout=120000)  # Timeout aumentado para 60 segundos
-            # Espera que a página esteja completamente carregada, aumentando o timeout
-            page.wait_for_load_state('networkidle', timeout=120000) # Espera até que toda a rede esteja ociosa (útil para páginas dinâmicas)
+            page.goto(url, timeout=120000)
+            page.wait_for_load_state('networkidle', timeout=120000)
 
-            # Extrai o HTML completo da página
             page_content = page.content()
-
-            # Passa o HTML para o BeautifulSoup
             soup = BeautifulSoup(page_content, 'html.parser')
-
-            # Verifica a estrutura da página e extrai as manchetes
             headline_tags = soup.find_all('div', class_='queryly_item_row')
-
             print(f"Encontradas {len(headline_tags)} manchetes. url: {url}")
 
-            # Extrai as manchetes e os links
             for tag in headline_tags:
                 link_tag = tag.find('a')
                 if link_tag:
@@ -387,8 +350,6 @@ def ajc(url):
                         })
 
             browser.close()
-
-            # Imprime as manchetes encontradas
             print(headlines)
 
     except Exception as e:
@@ -396,7 +357,7 @@ def ajc(url):
 
     return headlines
 
-def reviewJournal(url):
+def review_journal(url):
     headlines = []
     try:
         response = requests.get(url)
@@ -417,39 +378,30 @@ def reviewJournal(url):
 
     return headlines  
 
-def nbcNews(url):
+def nbc_news(url):
     headlines = []
     
     try:
-        # Inicia o Playwright
         with sync_playwright() as p:
-            # Usa o navegador Chromium (pode trocar por Firefox ou WebKit)
-            browser = p.chromium.launch(headless=True)  # Use headless=False se quiser ver o navegador em ação
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # Acessa a URL
             page.goto(url)
-            page.wait_for_load_state('networkidle')  # Espera até que toda a rede esteja ociosa (útil para páginas dinâmicas)
+            page.wait_for_load_state('networkidle')
 
-            # Extrai o HTML completo da página
             page_content = page.content()
-
-            # Passa o HTML para o BeautifulSoup
             soup = BeautifulSoup(page_content, 'html.parser')
-
-            # Verifique a estrutura atual da página (mantenha o seletor ou ajuste conforme necessário)
-            headline_tags = soup.find_all('div', class_='gsc-webResult gsc-result')  # Ajuste o seletor conforme necessário
+            headline_tags = soup.find_all('div', class_='gsc-webResult gsc-result')
             print(f"Encontradas {len(headline_tags)} manchetes na URL: {url}")
 
-            # Extrai manchetes e links
             for tag in headline_tags:
                 link_tag = tag.find('a')
                 if link_tag:
                     headlines.append({'texto': link_tag.get_text(strip=True), 'fonte': link_tag['href']})
 
             browser.close()
-            
             print(headlines)
+
     except Exception as e:
         print(f"Erro durante a extração: {e}")
 

@@ -3,31 +3,27 @@ from connection import *
 from datetime import datetime
 import concurrent.futures
 
-from pymongo import InsertOne
 
-
-TELEGRAM_TOKEN = 'SEU_TOKEN'
+telegram_token = 'SEU_TOKEN'
 mongo = MonogoDB('SEU_BANCO')
 
-# Produção
 id_bot = 'SEU_ID'
-
 
 urls = {
     "https://www.economist.com/search?q=": economist,
     "https://www.ap.org/?s=": ap_org,
-    "https://www.nytimes.com/search?query=": nytimes,
+    "https://www.nytimes.com/search?query=": ny_times,
     "https://www.rasmussenreports.com/search?SearchText=": rasmussenreports,
     "https://www.freep.com/search/?q=": freep,
     "https://www.azcentral.com/search/?q=": azcentral,
     "https://www.usatoday.com/search/?q=": usatoday,
     "https://www.latimes.com/search?q=": latimes, 
-    "https://abcnews.go.com/search?searchtext=": abcNews,
+    "https://abcnews.go.com/search?searchtext=": abc_news,
     "https://www.pbs.org/search/?q=": pbs,
-    "https://nypost.com/search/": nyPost,
-    "https://www.reviewjournal.com/?s=": reviewJournal,
-    "https://www.nbcnews.com/search/?q=" : nbcNews,
-    "https://www.foxnews.com/search-results/search?q=": foxNews,
+    "https://nypost.com/search/": ny_post,
+    "https://www.reviewjournal.com/?s=": review_journal,
+    "https://www.nbcnews.com/search/?q=" : nbc_news,
+    "https://www.foxnews.com/search-results/search?q=": fox_news,
     "https://www.ajc.com/search/?q=": ajc,
 }
 
@@ -37,18 +33,6 @@ termos = [
     "YouGov", "Elections in the United States", "Vance", "Tim Walz"
 ]
 
-# aqui estamos fazendo uma funçao para juntar cada termo em cada url.
-def processar_termo(base_url, termo):
-    search_url = base_url + termo.replace(" ", "+")
-    func = urls[base_url]
-    return func(search_url)
-
-def atualizar_mongo_com_cache(manchetes_local):
-    requests = []
-    for manchete in manchetes_local:
-        requests.append(InsertOne(manchete))
-    if requests:
-        mongo.db.collection.bulk_write(requests)
 
 def main():
 
@@ -62,7 +46,7 @@ def main():
         manchetes_local = [] 
 
     # 2 - Aqui que processa em multithread as urls com os termos.
-        futures = [executor.submit(processar_termo, base_url, termo) for base_url in urls]
+        futures = [executor.submit(processar_termo, urls, base_url, termo) for base_url in urls]
         for future in concurrent.futures.as_completed(futures):
             resultado = future.result()
             if resultado:
@@ -70,7 +54,7 @@ def main():
 
         if manchetes_local: 
             mensagens_para_enviar = [] 
-            atualizar_mongo_com_cache(manchetes_local)  
+            atualizar_mongo_cache(mongo, manchetes_local)  
 
         # 3 - Aqui fizemos um multithread para adicionar as noticias na variável mensagens_para_enviar.
             for manchete in manchetes_local:
@@ -98,7 +82,7 @@ def main():
                             f"Termo: {termo}\n\n" + "\n".join(message_lines))  
                     
                     time.sleep(1)  
-                    executor.submit(enviar_mensagem, TELEGRAM_TOKEN, id_bot, message)
+                    executor.submit(enviar_mensagem, telegram_token, id_bot, message)
 
     executor.shutdown(wait=True)
 
